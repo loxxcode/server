@@ -3,9 +3,8 @@ const cors = require('cors');
 
 // List of allowed origins
 const allowedOrigins = [
-  'https://client-nu-bay.vercel.app/login',
+  'https://client-nu-bay.vercel.app',
   'http://localhost:3000',
-  'http://localhost:5000',
   // Add any other origins as needed
 ];
 
