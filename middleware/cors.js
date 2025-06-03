@@ -3,7 +3,7 @@ const cors = require('cors');
 
 // List of allowed origins
 const allowedOrigins = [
-  'https://icyizere-v2.vercel.app',
+  'https://client-gold-theta.vercel.app',
   'http://localhost:3000',
   'http://localhost:5000',
   // Add any other origins as needed
