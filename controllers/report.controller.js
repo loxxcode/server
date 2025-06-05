@@ -3,23 +3,21 @@ const StockIn = require('../models/StockIn');
 const Product = require('../models/Product');
 const Supplier = require('../models/Supplier');
 
+// Helper function to sanitize input
+const sanitizeInput = (input) => {
+  return input ? input.trim() : '';
+};
+
 // @desc    Get sales report by date range
 // @route   GET /api/reports/sales
 // @access  Private/Admin
 exports.getSalesReport = async (req, res) => {
   try {
     let { startDate, endDate } = req.query;
+    startDate = sanitizeInput(startDate);
+    endDate = sanitizeInput(endDate);
     
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide start and end dates'
-      });
-    }
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // End of day
+    const { start, end } = validateDateRange(startDate, endDate);
     
     const sales = await StockOut.find({
       saleDate: {
@@ -174,16 +172,7 @@ exports.getSupplierDeliveriesReport = async (req, res) => {
   try {
     let { startDate, endDate, supplierId } = req.query;
     
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide start and end dates'
-      });
-    }
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // End of day
+    const { start, end } = validateDateRange(startDate, endDate);
     
     let query = {
       deliveryDate: {
@@ -265,16 +254,7 @@ exports.getProfitReport = async (req, res) => {
   try {
     let { startDate, endDate } = req.query;
     
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide start and end dates'
-      });
-    }
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // End of day
+    const { start, end } = validateDateRange(startDate, endDate);
     
     // Get sales in date range
     const sales = await StockOut.find({
@@ -394,16 +374,7 @@ exports.getProductSalesReport = async (req, res) => {
   try {
     let { startDate, endDate } = req.query;
     
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide start and end dates'
-      });
-    }
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // End of day
+    const { start, end } = validateDateRange(startDate, endDate);
     
     // Get all products with their sales data
     const products = await Product.find({})
@@ -420,8 +391,14 @@ exports.getProductSalesReport = async (req, res) => {
     
     // Process product sales data
     const productSales = products.map(product => {
+      if (!product || !product._id) {
+        return null;
+      }
+      
       const productSales = sales.filter(sale => 
-        sale.product && sale.product._id.toString() === product._id.toString()
+        sale.product && 
+        sale.product._id && 
+        sale.product._id.toString() === product._id.toString()
       );
       
       const quantitySold = productSales.reduce((sum, sale) => sum + sale.quantity, 0);
@@ -439,12 +416,12 @@ exports.getProductSalesReport = async (req, res) => {
         averagePrice,
         revenueChange: 0 // This would require historical data to calculate
       };
-    });
+    }).filter(Boolean); // Remove null entries
     
     // Calculate totals
     const totalProducts = products.length;
     const totalProductsSold = productSales.reduce((sum, p) => sum + p.quantitySold, 0);
-    const totalRevenue = productSales.reduce((sum, p) => sum + p.totalRevenue, 0);
+    const totalRevenue = productSales.reduce((sum, p) => sum + (p.totalRevenue || 0), 0);
     const averageSalePrice = totalProductsSold > 0 ? totalRevenue / totalProductsSold : 0;
     
     res.json({
@@ -467,20 +444,31 @@ exports.getProductSalesReport = async (req, res) => {
 
 // Helper functions
 async function calculateCostOfGoodsSold(sales) {
+  // Create a map of product IDs to avoid repeated queries
+  const productCosts = new Map();
   let costOfGoodsSold = 0;
   
   for (const sale of sales) {
-    // Find the average purchase price for this product
-    const stockIns = await StockIn.find({ product: sale.product._id });
+    if (!sale.product?._id) continue;
     
-    if (stockIns.length > 0) {
-      // Calculate average cost
-      const totalCost = stockIns.reduce((acc, stockIn) => acc + stockIn.unitPrice, 0);
-      const avgCost = totalCost / stockIns.length;
+    const productId = sale.product._id.toString();
+    
+    if (!productCosts.has(productId)) {
+      const stockIns = await StockIn.find({ product: productId })
+        .select('unitPrice')
+        .lean();
       
-      // Multiply by quantity sold
-      costOfGoodsSold += avgCost * sale.quantity;
+      if (stockIns.length > 0) {
+        const totalCost = stockIns.reduce((acc, stockIn) => acc + (stockIn.unitPrice || 0), 0);
+        const avgCost = totalCost / stockIns.length;
+        productCosts.set(productId, avgCost);
+      } else {
+        productCosts.set(productId, 0);
+      }
     }
+    
+    const avgCost = productCosts.get(productId);
+    costOfGoodsSold += avgCost * (sale.quantity || 0);
   }
   
   return costOfGoodsSold;
@@ -529,3 +517,24 @@ async function calculateProductProfitability(sales) {
   // Sort by profit (highest first)
   return Object.values(productMap).sort((a, b) => b.profit - a.profit);
 }
+
+// Add this helper function at the bottom of the file
+const validateDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) {
+    throw new Error('Please provide start and end dates');
+  }
+  
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw new Error('Invalid date format');
+  }
+  
+  if (end < start) {
+    throw new Error('End date cannot be before start date');
+  }
+  
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
