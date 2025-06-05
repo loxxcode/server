@@ -3,7 +3,7 @@ const cors = require('cors');
 
 // List of allowed origins
 const allowedOrigins = [
-  'https://client-nu-bay.vercel.app',
+  'https://client-one-pearl.vercel.app',
   'http://localhost:3000',
   // Add any other origins as needed
 ];
