@@ -26,7 +26,10 @@ const corsOptions = {
   },
   credentials: true, // Allow cookies and authentication
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'X-HTTP-Method-Override'],
+  headers: {
+  'Content-Type': 'application/json',
+  'Authorization': 'Bearer your-token', // if used
+  },
   maxAge: 86400, // Cache preflight response for 24 hours
   preflightContinue: false,
   optionsSuccessStatus: 204
@@ -44,10 +47,10 @@ const applyCorsMw = (app) => {
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin) || !origin) {
-      res.header('Access-Control-Allow-Origin', origin || '*');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-HTTP-Method-Override');
     } else {
       // For development, allow all origins
-      res.header('Access-Control-Allow-Origin', origin || '*');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-HTTP-Method-Override');
     }
     
     res.header('Access-Control-Allow-Credentials', 'true');
