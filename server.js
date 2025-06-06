@@ -18,12 +18,6 @@ applyCorsMw(app);
 // Middleware configuration
 app.use(express.json());
 app.use(morgan('dev'));
-app.use(cors({
-  origin: ['https://client-one-pearl.vercel.app', 'https:localhost:3000'], // Add your client URLs here
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true // optional, only if you use cookies
-}));
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
